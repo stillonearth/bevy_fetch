@@ -10,8 +10,9 @@ pub struct FetchPlugin;
 
 #[derive(Event)]
 pub enum FetchRequest {
-    Str(String),
-    Image(String),
+    GetString(String),
+    PostString(String, String),
+    GetImage(String),
 }
 
 #[derive(Event)]
@@ -31,19 +32,34 @@ impl Plugin for FetchPlugin {
 fn handle_fetch_request(mut er_fetch_request: EventReader<FetchRequest>, tasks: Tasks) {
     for er in er_fetch_request.read() {
         let link = match er {
-            FetchRequest::Str(link) => link.clone(),
-            FetchRequest::Image(link) => link.clone(),
+            FetchRequest::GetString(link) => link.clone(),
+            FetchRequest::GetImage(link) => link.clone(),
+            FetchRequest::PostString(link, _) => link.clone(),
         };
         let frag_fetch_string = match er {
-            FetchRequest::Str(_) => true,
-            FetchRequest::Image(_) => false,
+            FetchRequest::GetString(_) => true,
+            FetchRequest::GetImage(_) => false,
+            FetchRequest::PostString(_, _) => true,
+        };
+        let get_or_post = match er {
+            FetchRequest::GetString(_) => true,
+            FetchRequest::GetImage(_) => true,
+            FetchRequest::PostString(_, _) => false,
+        };
+        let payload = match er {
+            FetchRequest::GetString(_) => "".to_string(),
+            FetchRequest::GetImage(_) => "".to_string(),
+            FetchRequest::PostString(_, payload) => payload.clone(),
         };
 
         // TODO: DEDUP
         #[cfg(not(target_arch = "wasm32"))]
         tasks.spawn_tokio(move |ctx| async move {
             if frag_fetch_string {
-                let response = fetch_string(link.clone()).await;
+                let response = match get_or_post {
+                    true => get_string(link.clone()).await,
+                    false => post_string(link.clone(), payload.clone()).await,
+                };
                 if response.is_ok() {
                     let text = response.unwrap();
                     ctx.run_on_main_thread(move |ctx| {
@@ -72,7 +88,10 @@ fn handle_fetch_request(mut er_fetch_request: EventReader<FetchRequest>, tasks: 
         #[cfg(target_arch = "wasm32")]
         tasks.spawn_wasm(move |ctx| async move {
             if frag_fetch_string {
-                let response = fetch_string(link.clone()).await;
+                let response = match get_or_post {
+                    true => get_string(link.clone()).await,
+                    false => post_string(link.clone(), payload.clone()).await,
+                };
                 if response.is_ok() {
                     let text = response.unwrap();
                     ctx.run_on_main_thread(move |ctx| {
@@ -100,9 +119,22 @@ fn handle_fetch_request(mut er_fetch_request: EventReader<FetchRequest>, tasks: 
     }
 }
 
-async fn fetch_string(link: String) -> Result<String> {
+async fn get_string(link: String) -> Result<String> {
     let client = Client::new();
     let response = client.get(link).send().await?;
+    let response_text = response.text().await?;
+
+    Ok(response_text)
+}
+
+async fn post_string(url: String, payload: String) -> Result<String> {
+    let client = Client::new();
+    let response = client
+        .post(url)
+        .header("Content-Type", "application/json")
+        .body(payload)
+        .send()
+        .await?;
     let response_text = response.text().await?;
 
     Ok(response_text)

@@ -1,0 +1,28 @@
+[package]
+edition = "2021"
+name = "bevy_fetch"
+version = "0.0.1"
+license = "MIT OR Apache-2.0"
+description = "Visual Novels with Bevy"
+keywords = ["visual-novel", "renpy", "rpy", "bevy", "scenario"]
+repository = "https://github.com/stillonearth/bevy_fetch"
+
+[dependencies]
+anyhow = "1.0"
+bevy = { version = "0.16", default-features = false, features = ["std"] }
+reqwest = "0.12.9"
+image = "0.25"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+bevy-wasm-tasks = { git = "https://github.com/stillonearth/bevy-wasm-tasks.git", rev = "62af5afd5b0", features = [
+    "tokio",
+] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+bevy-wasm-tasks = { git = "https://github.com/stillonearth/bevy-wasm-tasks.git", rev = "62af5afd5b0", features = [
+    "wasm",
+] }
+
+
+[profile.dev]
+opt-level = 3
